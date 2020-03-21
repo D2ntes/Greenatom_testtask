@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime
+from time import sleep
+
 import requests
 from bs4 import BeautifulSoup
-from time import sleep
 
 from Action import Action
 
@@ -9,14 +11,16 @@ from Action import Action
 class ParseQuotePageAction(Action):
     def __init__(self):
         self.data_types = [
-
+            lambda x: datetime.strptime(f"{x}", "%d.%m.%y").date(),
+            lambda x: float(x.replace(',', '.')),
+            lambda x: float(x.replace(',', '.')),
         ]
 
     def process(self, context):
-        yandex_page_soup = self.get_page_soup(context.url)
-        currency_url_link = self.parse_currency_link(yandex_page_soup, context.currency)
-        currency_page_soup = self.get_page_soup(currency_url_link)
-        headers, rows = self.parse_quote_data(currency_page_soup)
+        page = self.get_page_soup(context.url)
+        currency_url = self.parse_currency_link(page, context.currency)
+        page = self.get_page_soup(currency_url)
+        headers, rows = self.parse_quote_data(page, self.data_types)
         context.headers = headers
         context.rows = rows
 
@@ -26,7 +30,7 @@ class ParseQuotePageAction(Action):
         return link
 
     # Получаем данные динамики курса
-    def parse_quote_data(self, soup):
+    def parse_quote_data(self, soup, types):
         headers = [cell.get_text(strip=True) for cell in soup.select('th')]
 
         rows = []
@@ -34,8 +38,7 @@ class ParseQuotePageAction(Action):
             cells = row.find_all('td')
             if not cells:
                 continue
-            row = [cell.get_text(strip=True) for cell in cells]
-
+            row = [t(cell.get_text(strip=True)) for cell, t in zip(cells, types)]
             rows.append(row)
 
         return headers, rows
